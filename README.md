@@ -58,7 +58,11 @@ curl -LO "https://raw.githubusercontent.com/ChanduCharanSample/Level-3-Terraform
 chmod +x cloudcupcake8.sh
 ./cloudcupcake8.sh
 ```
-🎉 Congratulations! You’ve successfully completed all 8 labs and earned your Level-3 Terraform & Developer Essentials game badge! 🏆
+---
+
+#🎉 Congratulations! You’ve successfully completed all 8 labs and earned your Level-3 Terraform & Developer Essentials game badge! 🏆
+
+---
 
 📢 Don’t stop here — keep leveling up your cloud skills!
 🔔 Subscribe to cloudcupcake for:
@@ -74,5 +78,3 @@ chmod +x cloudcupcake8.sh
 Let’s keep building the future, one lab at a time! 💡
 
 
-Copy
-Edit
