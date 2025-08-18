@@ -4,7 +4,13 @@
 # ======================================================
 
 # --- Variables ---
-PROJECT_ID="qwiklabs-gcp-02-b016291c2702"
+PROJECT_ID=$(gcloud config get-value project 2> /dev/null)
+
+if [[ -z "$PROJECT_ID" ]]; then
+  echo "❌ No active project found. Please set a project first:"
+  echo "   gcloud config set project PROJECT_ID"
+  exit 1
+fi
 
 # Ask for region and zone
 read -p "Enter region [us-west1]: " REGION
