@@ -7,7 +7,6 @@
 PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
 REGION=$(gcloud config get-value compute/region 2>/dev/null)
 ZONE=$(gcloud config get-value compute/zone 2>/dev/null)
-BUCKET_NAME="${PROJECT_ID}-terraform-state"
 
 # --- If REGION/ZONES not set, prompt user ---
 if [[ -z "$REGION" ]]; then
@@ -32,15 +31,7 @@ gcloud config set project $PROJECT_ID
 gcloud config set compute/region $REGION
 gcloud config set compute/zone $ZONE
 
-# --- Step 2: Create GCS Bucket ---
-echo "🔹 Creating Cloud Storage bucket for Terraform state..."
-gcloud storage buckets create gs://$BUCKET_NAME --project=$PROJECT_ID --location=$REGION
-
-# --- Step 3: Enable Required API ---
-echo "🔹 Enabling Cloud Resource Manager API..."
-gcloud services enable cloudresourcemanager.googleapis.com --project=$PROJECT_ID
-
-# --- Step 4: Create Terraform Files ---
+# --- Step 2: Create Terraform Files ---
 echo "🔹 Creating Terraform configuration files..."
 mkdir -p terraform-vpc
 cd terraform-vpc
@@ -54,9 +45,8 @@ terraform {
       version = "~> 4.0"
     }
   }
-  backend "gcs" {
-    bucket = "$BUCKET_NAME"
-    prefix = "terraform/state"
+  backend "local" {
+    path = "terraform.tfstate"
   }
 }
 
@@ -125,9 +115,9 @@ output "subnet_name" {
 }
 EOF
 
-# --- Step 5: Initialize & Apply Terraform ---
+# --- Step 3: Initialize & Apply Terraform ---
 echo "🔹 Initializing Terraform..."
-terraform init
+terraform init -reconfigure
 
 echo "🔹 Planning Terraform deployment..."
 terraform plan
@@ -135,7 +125,7 @@ terraform plan
 echo "🔹 Applying Terraform configuration..."
 terraform apply --auto-approve
 
-# --- Step 6: Verification ---
+# --- Step 4: Verification ---
 echo "✅ Verifying created resources..."
 echo "VPC Networks:"
 gcloud compute networks list --filter="name=custom-vpc-network"
@@ -144,7 +134,7 @@ gcloud compute networks subnets list --filter="name=subnet-*"
 echo "Firewall Rules:"
 gcloud compute firewall-rules list --filter="name~'allow-ssh|allow-icmp'"
 
-# --- Step 7: Cleanup ---
+# --- Step 5: Cleanup ---
 echo "⚠️ Destroying resources to avoid charges..."
 terraform destroy --auto-approve
 cd ..
