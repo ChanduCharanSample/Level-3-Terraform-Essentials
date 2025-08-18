@@ -1,42 +1,49 @@
 #!/bin/bash
 # ======================================================
-# Terraform + Google Cloud VPC Creation Lab - Auto Region/Zone
+# Terraform Essentials Lab + Cloudcupcake VM Setup
+# Combined Script for Qwiklabs
 # ======================================================
 
-# --- Variables ---
-PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
-REGION=$(gcloud config get-value compute/region 2>/dev/null)
-ZONE=$(gcloud config get-value compute/zone 2>/dev/null)
+# --- Step 1: Detect Project ---
+PROJECT_ID=$(gcloud config get-value project 2> /dev/null)
 
-# --- If REGION/ZONES not set, prompt user ---
-if [[ -z "$REGION" ]]; then
-  echo "⚠️ No default region found in gcloud config."
-  read -p "👉 Enter the region for this lab (e.g., us-central1): " REGION
-  gcloud config set compute/region $REGION
+if [[ -z "$PROJECT_ID" ]]; then
+  echo "❌ No active project found. Please set a project first:"
+  echo "gcloud config set project PROJECT_ID"
+  exit 1
 fi
 
-if [[ -z "$ZONE" ]]; then
-  echo "⚠️ No default zone found in gcloud config."
-  read -p "👉 Enter the zone for this lab (e.g., us-central1-a): " ZONE
-  gcloud config set compute/zone $ZONE
-fi
+echo "✅ Current Project ID: $PROJECT_ID"
 
-echo "🔹 Using Project: $PROJECT_ID"
-echo "🔹 Using Region : $REGION"
-echo "🔹 Using Zone   : $ZONE"
+# --- Step 2: Ask for region/zone (with defaults) ---
+read -p "Enter region [us-central1]: " REGION
+REGION=${REGION:-us-central1}
 
-# --- Step 1: Set gcloud Config ---
-echo "🔹 Setting Google Cloud configuration..."
+read -p "Enter zone [us-central1-b]: " ZONE
+ZONE=${ZONE:-us-central1-b}
+
+# --- Step 3: Configure gcloud defaults ---
 gcloud config set project $PROJECT_ID
 gcloud config set compute/region $REGION
 gcloud config set compute/zone $ZONE
 
-# --- Step 2: Create Terraform Files ---
-echo "🔹 Creating Terraform configuration files..."
+echo "🌍 Using Project: $PROJECT_ID"
+echo "📍 Region: $REGION"
+echo "📍 Zone: $ZONE"
+
+# --- Step 4: Create GCS bucket for Terraform state ---
+BUCKET_NAME="${PROJECT_ID}-terraform-state"
+echo "🔹 Creating GCS bucket: $BUCKET_NAME"
+gcloud storage buckets create gs://$BUCKET_NAME --project=$PROJECT_ID --location=us
+
+# --- Step 5: Enable required APIs ---
+echo "🔹 Enabling Cloud Resource Manager API..."
+gcloud services enable cloudresourcemanager.googleapis.com --project=$PROJECT_ID
+
+# --- Step 6: Generate Terraform configuration ---
 mkdir -p terraform-vpc
 cd terraform-vpc
 
-# main.tf
 cat > main.tf <<EOF
 terraform {
   required_providers {
@@ -45,8 +52,9 @@ terraform {
       version = "~> 4.0"
     }
   }
-  backend "local" {
-    path = "terraform.tfstate"
+  backend "gcs" {
+    bucket = "$BUCKET_NAME"
+    prefix = "terraform/state"
   }
 }
 
@@ -61,7 +69,7 @@ resource "google_compute_network" "vpc_network" {
 }
 
 resource "google_compute_subnetwork" "subnet_us" {
-  name            = "subnet-\${var.region}"
+  name            = "subnet-us"
   ip_cidr_range   = "10.10.1.0/24"
   region          = "$REGION"
   network         = google_compute_network.vpc_network.id
@@ -87,7 +95,6 @@ resource "google_compute_firewall" "allow_icmp" {
 }
 EOF
 
-# variables.tf
 cat > variables.tf <<EOF
 variable "project_id" {
   type        = string
@@ -102,7 +109,6 @@ variable "region" {
 }
 EOF
 
-# outputs.tf
 cat > outputs.tf <<EOF
 output "network_name" {
   value       = google_compute_network.vpc_network.name
@@ -115,29 +121,35 @@ output "subnet_name" {
 }
 EOF
 
-# --- Step 3: Initialize & Apply Terraform ---
+# --- Step 7: Deploy Terraform ---
 echo "🔹 Initializing Terraform..."
 terraform init -reconfigure
 
 echo "🔹 Planning Terraform deployment..."
 terraform plan
 
-echo "🔹 Applying Terraform configuration..."
+echo "🔹 Applying Terraform..."
 terraform apply --auto-approve
 
-# --- Step 4: Verification ---
-echo "✅ Verifying created resources..."
-echo "VPC Networks:"
+# --- Step 8: Verification of resources ---
+echo "✅ Checking resources..."
 gcloud compute networks list --filter="name=custom-vpc-network"
-echo "Subnets:"
-gcloud compute networks subnets list --filter="name=subnet-*"
-echo "Firewall Rules:"
+gcloud compute networks subnets list --filter="name=subnet-us"
 gcloud compute firewall-rules list --filter="name~'allow-ssh|allow-icmp'"
 
-# --- Step 5: Cleanup ---
-echo "⚠️ Destroying resources to avoid charges..."
-terraform destroy --auto-approve
-cd ..
-rm -rf terraform-vpc
+# --- Step 9: Create test VM ---
+echo "🔹 Creating test VM: cloudcupcake-vm"
+gcloud compute instances create cloudcupcake-vm \
+  --machine-type=e2-medium \
+  --image-family=debian-11 \
+  --image-project=debian-cloud \
+  --boot-disk-size=10GB \
+  --boot-disk-type=pd-balanced \
+  --subnet=subnet-us
 
-echo "🎯 Lab completed successfully!"
+echo "🎉 Setup complete!"
+echo "➡ Project: $PROJECT_ID"
+echo "➡ Region: $REGION"
+echo "➡ Zone: $ZONE"
+echo "➡ VM: cloudcupcake-vm"
+echo "⚠️ Do NOT destroy resources until grader checks."
