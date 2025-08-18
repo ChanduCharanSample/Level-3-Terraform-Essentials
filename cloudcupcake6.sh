@@ -1,13 +1,30 @@
 #!/bin/bash
 # ======================================================
-# Terraform + Google Cloud VPC Creation Lab - One Script
+# Terraform + Google Cloud VPC Creation Lab - Auto Region/Zone
 # ======================================================
 
 # --- Variables ---
-PROJECT_ID="qwiklabs-gcp-02-b016291c2702"
-REGION="us-west1"
-ZONE="us-west1-b"
+PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
+REGION=$(gcloud config get-value compute/region 2>/dev/null)
+ZONE=$(gcloud config get-value compute/zone 2>/dev/null)
 BUCKET_NAME="${PROJECT_ID}-terraform-state"
+
+# --- If REGION/ZONES not set, prompt user ---
+if [[ -z "$REGION" ]]; then
+  echo "⚠️ No default region found in gcloud config."
+  read -p "👉 Enter the region for this lab (e.g., us-central1): " REGION
+  gcloud config set compute/region $REGION
+fi
+
+if [[ -z "$ZONE" ]]; then
+  echo "⚠️ No default zone found in gcloud config."
+  read -p "👉 Enter the zone for this lab (e.g., us-central1-a): " ZONE
+  gcloud config set compute/zone $ZONE
+fi
+
+echo "🔹 Using Project: $PROJECT_ID"
+echo "🔹 Using Region : $REGION"
+echo "🔹 Using Zone   : $ZONE"
 
 # --- Step 1: Set gcloud Config ---
 echo "🔹 Setting Google Cloud configuration..."
@@ -17,7 +34,7 @@ gcloud config set compute/zone $ZONE
 
 # --- Step 2: Create GCS Bucket ---
 echo "🔹 Creating Cloud Storage bucket for Terraform state..."
-gcloud storage buckets create gs://$BUCKET_NAME --project=$PROJECT_ID --location=us
+gcloud storage buckets create gs://$BUCKET_NAME --project=$PROJECT_ID --location=$REGION
 
 # --- Step 3: Enable Required API ---
 echo "🔹 Enabling Cloud Resource Manager API..."
@@ -54,7 +71,7 @@ resource "google_compute_network" "vpc_network" {
 }
 
 resource "google_compute_subnetwork" "subnet_us" {
-  name            = "subnet-us"
+  name            = "subnet-\${var.region}"
   ip_cidr_range   = "10.10.1.0/24"
   region          = "$REGION"
   network         = google_compute_network.vpc_network.id
@@ -123,7 +140,7 @@ echo "✅ Verifying created resources..."
 echo "VPC Networks:"
 gcloud compute networks list --filter="name=custom-vpc-network"
 echo "Subnets:"
-gcloud compute networks subnets list --filter="name=subnet-us"
+gcloud compute networks subnets list --filter="name=subnet-*"
 echo "Firewall Rules:"
 gcloud compute firewall-rules list --filter="name~'allow-ssh|allow-icmp'"
 
